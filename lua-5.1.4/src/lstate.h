@@ -134,7 +134,7 @@ struct lua_State {
 ** Union of all collectable objects
 */
 union GCObject {
-  GCheader gch;
+  GCheader gch;         /* common header */
   union TString ts;
   union Udata u;
   union Closure cl;

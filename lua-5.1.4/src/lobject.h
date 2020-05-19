@@ -57,15 +57,16 @@ typedef struct GCheader {
 ** Union of all Lua values
 */
 typedef union {
-  GCObject *gc;
-  void *p;
-  lua_Number n;
-  int b;
+  GCObject *gc;   /* collectable objects 用来指向那些需要垃圾回收的对象 */
+  void *p;        /* light userdata */
+  lua_Number n;   /* numbers */
+  int b;          /* booleans */
 } Value;
 
 
 /*
 ** Tagged Values
+** tt用来表示数据类型，对应lua.h中的basic types
 */
 
 #define TValuefields	Value value; int tt
@@ -336,12 +337,12 @@ typedef struct Node {
 
 
 typedef struct Table {
-  CommonHeader;
+  CommonHeader;  // 所有可回收资源的公共标记头
   lu_byte flags;  /* 1<<p means tagmethod(p) is not present */ 
-  lu_byte lsizenode;  /* log2 of size of `node' array */
+  lu_byte lsizenode;  /* log2 of size of `node' array */  // 哈希表大小取log2 [2^lsizenode即为哈希表大小]
   struct Table *metatable;
-  TValue *array;  /* array part */
-  Node *node;
+  TValue *array;  /* array part */  // table的数组部分
+  Node *node;                       // table的哈希表部分  每个Node都是一个键值对
   Node *lastfree;  /* any free position is before this position */
   GCObject *gclist;
   int sizearray;  /* size of `array' array */
