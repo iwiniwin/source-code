@@ -72,6 +72,7 @@ void *luaM_toobig (lua_State *L) {
 
 /*
 ** generic allocation routine.
+** 统一的内存申请入口
 */
 void *luaM_realloc_ (lua_State *L, void *block, size_t osize, size_t nsize) {
   global_State *g = G(L);

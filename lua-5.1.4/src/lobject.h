@@ -79,6 +79,7 @@ typedef struct lua_TValue {
 /* Macros to test type */
 #define ttisnil(o)	(ttype(o) == LUA_TNIL)
 #define ttisnumber(o)	(ttype(o) == LUA_TNUMBER)
+// 判断TValue类型是否是string
 #define ttisstring(o)	(ttype(o) == LUA_TSTRING)
 #define ttistable(o)	(ttype(o) == LUA_TTABLE)
 #define ttisfunction(o)	(ttype(o) == LUA_TFUNCTION)
@@ -88,10 +89,15 @@ typedef struct lua_TValue {
 #define ttislightuserdata(o)	(ttype(o) == LUA_TLIGHTUSERDATA)
 
 /* Macros to access values */
+// 获取Tvalue的类型
 #define ttype(o)	((o)->tt)
+// 获取TValue中的GCObject指针
 #define gcvalue(o)	check_exp(iscollectable(o), (o)->value.gc)
+// 获取TValue中的light userdata
 #define pvalue(o)	check_exp(ttislightuserdata(o), (o)->value.p)
+// 获取TValue中的number
 #define nvalue(o)	check_exp(ttisnumber(o), (o)->value.n)
+// 获取TValue中的字符串TString
 #define rawtsvalue(o)	check_exp(ttisstring(o), &(o)->value.gc->ts)
 #define tsvalue(o)	(&rawtsvalue(o)->tsv)
 #define rawuvalue(o)	check_exp(ttisuserdata(o), &(o)->value.gc->u)
@@ -201,9 +207,9 @@ typedef union TString {
   L_Umaxalign dummy;  /* ensures maximum alignment for strings */
   struct {
     CommonHeader;
-    lu_byte reserved;
-    unsigned int hash;
-    size_t len;
+    lu_byte reserved;     // 是否是保留字
+    unsigned int hash;    // 字符串的hash值
+    size_t len;           // 字符串的长度
   } tsv;
 } TString;
 
@@ -324,7 +330,7 @@ typedef union Closure {
 typedef union TKey {
   struct {
     TValuefields;
-    struct Node *next;  /* for chaining */
+    struct Node *next;  /* for chaining */  // 同一个hash值冲突时的next指针
   } nk;
   TValue tvk;
 } TKey;
@@ -338,12 +344,12 @@ typedef struct Node {
 
 typedef struct Table {
   CommonHeader;  // 所有可回收资源的公共标记头
-  lu_byte flags;  /* 1<<p means tagmethod(p) is not present */ 
+  lu_byte flags;  /* 1<<p means tagmethod(p) is not present */  // 用于标记有没有某个元方法
   lu_byte lsizenode;  /* log2 of size of `node' array */  // 哈希表大小取log2 [2^lsizenode即为哈希表大小]
   struct Table *metatable;
   TValue *array;  /* array part */  // table的数组部分
   Node *node;                       // table的哈希表部分  每个Node都是一个键值对
-  Node *lastfree;  /* any free position is before this position */
+  Node *lastfree;  /* any free position is before this position */  // 链表的最后一个空元素
   GCObject *gclist;
   int sizearray;  /* size of `array' array */
 } Table;
@@ -352,12 +358,17 @@ typedef struct Table {
 
 /*
 ** `module' operation for hashing (size is always a power of 2)
+** 将s对size求余
+** 当size为2的n次方时，(s) & ((size)-1) = s % size
+** 例如当size为8时，对8求余，最大数为7，将 8 - 1，相当于将最高位置为0，其他位保留 0111
+** 将目标数与其&，则会保留目标数的低位部分，相当于求余
 */
 #define lmod(s,size) \
 	(check_exp((size&(size-1))==0, (cast(int, (s) & ((size)-1)))))
 
-
-#define twoto(x)	(1<<(x))
+// 求2的x次方
+#define twoto(x)	(1<<(x))  
+// 求表的hash部分长度
 #define sizenode(t)	(twoto((t)->lsizenode))
 
 

@@ -11,6 +11,7 @@
 
 
 #define gnode(t,i)	(&(t)->node[i])
+// 获取Node.key的nk结构体（包含next指针与Value）
 #define gkey(n)		(&(n)->i_key.nk)
 #define gval(n)		(&(n)->i_val)
 #define gnext(n)	((n)->i_key.nk.next)

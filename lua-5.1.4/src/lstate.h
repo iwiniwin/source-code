@@ -67,7 +67,7 @@ typedef struct CallInfo {
 */
 typedef struct global_State {
   stringtable strt;  /* hash table for strings */
-  lua_Alloc frealloc;  /* function to reallocate memory */
+  lua_Alloc frealloc;  /* function to reallocate memory */  // 申请内存的函数指针
   void *ud;         /* auxiliary data to `frealloc' */
   lu_byte currentwhite;
   lu_byte gcstate;  /* state of garbage collector */
@@ -135,12 +135,12 @@ struct lua_State {
 */
 union GCObject {
   GCheader gch;         /* common header */
-  union TString ts;
-  union Udata u;
-  union Closure cl;
-  struct Table h;
-  struct Proto p;
-  struct UpVal uv;
+  union TString ts;     // 字符串
+  union Udata u;        // userdata
+  union Closure cl;     // 闭包
+  struct Table h;       // 表
+  struct Proto p;       // proto
+  struct UpVal uv;      // upvalue
   struct lua_State th;  /* thread */
 };
 

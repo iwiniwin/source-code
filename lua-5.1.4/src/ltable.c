@@ -49,6 +49,7 @@
 
 #define hashpow2(t,n)      (gnode(t, lmod((n), sizenode(t))))
   
+// 使用字符串的hash值与t的哈希部分长度求余，得到i，返回t.node[i]
 #define hashstr(t,str)  hashpow2(t, (str)->tsv.hash)
 #define hashboolean(t,p)        hashpow2(t, p)
 
@@ -56,6 +57,7 @@
 /*
 ** for some types, it is better to avoid modulus by power of 2, as
 ** they tend to have many 2 factors.
+** 对于某些类型，最好避免直接对2的次幂取余，它们有很多因数2
 */
 #define hashmod(t,n)	(gnode(t, ((n) % ((sizenode(t)-1)|1))))
 
@@ -65,6 +67,7 @@
 
 /*
 ** number of ints inside a lua_Number
+** 一个number里可以包含几个int
 */
 #define numints		cast_int(sizeof(lua_Number)/sizeof(int))
 
@@ -80,13 +83,14 @@ static const Node dummynode_ = {
 
 /*
 ** hash for lua_Numbers
+** 求lua_Numbers的hash值
 */
 static Node *hashnum (const Table *t, lua_Number n) {
   unsigned int a[numints];
   int i;
   if (luai_numeq(n, 0))  /* avoid problems with -0 */
     return gnode(t, 0);
-  memcpy(a, &n, sizeof(a));
+  memcpy(a, &n, sizeof(a));  // 将n的值复制到a中
   for (i = 1; i < numints; i++) a[0] += a[i];
   return hashmod(t, a[0]);
 }
@@ -259,12 +263,12 @@ static int numusehash (const Table *t, int *nums, int *pnasize) {
   return totaluse;
 }
 
-
+// 初始化table的数组部分
 static void setarrayvector (lua_State *L, Table *t, int size) {
   int i;
   luaM_reallocvector(L, t->array, t->sizearray, size, TValue);
   for (i=t->sizearray; i<size; i++)
-     setnilvalue(&t->array[i]);
+     setnilvalue(&t->array[i]);  // 将每个元素的tt类型设置为nil
   t->sizearray = size;
 }
 
@@ -280,13 +284,13 @@ static void setnodevector (lua_State *L, Table *t, int size) {
     lsize = ceillog2(size);
     if (lsize > MAXBITS)
       luaG_runerror(L, "table overflow");
-    size = twoto(lsize);
-    t->node = luaM_newvector(L, size, Node);
+    size = twoto(lsize);  // 求2的lsize次方
+    t->node = luaM_newvector(L, size, Node);  // 申请size个Node大小的内存
     for (i=0; i<size; i++) {
       Node *n = gnode(t, i);
-      gnext(n) = NULL;
-      setnilvalue(gkey(n));
-      setnilvalue(gval(n));
+      gnext(n) = NULL;       // 将node的key的next设置为nil
+      setnilvalue(gkey(n));  // 将node的key类型设置为nil
+      setnilvalue(gval(n));  // 将node的val类型设置为nil
     }
   }
   t->lsizenode = cast_byte(lsize);
@@ -352,11 +356,16 @@ static void rehash (lua_State *L, Table *t, const TValue *ek) {
 
 /*
 ** }=============================================================
+** 创建一个表
+** narray 数组部分大小
+** nhash 哈希部分大小
 */
 
 
 Table *luaH_new (lua_State *L, int narray, int nhash) {
+  // 申请内存
   Table *t = luaM_new(L, Table);
+  // gc相关，将新创建的对象放入到gc的链表中
   luaC_link(L, obj2gco(t), LUA_TTABLE);
   t->metatable = NULL;
   t->flags = cast_byte(~0);
@@ -365,8 +374,8 @@ Table *luaH_new (lua_State *L, int narray, int nhash) {
   t->sizearray = 0;
   t->lsizenode = 0;
   t->node = cast(Node *, dummynode);
-  setarrayvector(L, t, narray);
-  setnodevector(L, t, nhash);
+  setarrayvector(L, t, narray);  // 初始化table的数组部分
+  setnodevector(L, t, nhash);  // 初始化table的哈希表部分
   return t;
 }
 
@@ -453,22 +462,23 @@ const TValue *luaH_getnum (Table *t, int key) {
 ** search function for strings
 */
 const TValue *luaH_getstr (Table *t, TString *key) {
-  Node *n = hashstr(t, key);
+  Node *n = hashstr(t, key);  // 根据string hash值获取所在桶
   do {  /* check whether `key' is somewhere in the chain */
     if (ttisstring(gkey(n)) && rawtsvalue(gkey(n)) == key)
       return gval(n);  /* that's it */
     else n = gnext(n);
-  } while (n);
+  } while (n);  // 遍历哈希链
   return luaO_nilobject;
 }
 
 
 /*
 ** main search function
+** table的查找方法，t[key]是触发
 */
 const TValue *luaH_get (Table *t, const TValue *key) {
   switch (ttype(key)) {
-    case LUA_TNIL: return luaO_nilobject;
+    case LUA_TNIL: return luaO_nilobject;  // key是nil，返回nil
     case LUA_TSTRING: return luaH_getstr(t, rawtsvalue(key));
     case LUA_TNUMBER: {
       int k;
