@@ -672,12 +672,17 @@ void luaC_barrierf (lua_State *L, GCObject *o, GCObject *v) {
 }
 
 
+// 从黑色回退到灰色
+// back仅针对table类型成员，因为table对象经常出现一个table存放的是N个对象，也就是1:N的情况
+// 如果每个table在受到其中一个对象的影响都要重新标记，那会操作的很频繁，所以就索引回退处理
+// 等待后续的automic过程才一次性处理这个重新加入grayagain链表的对象
 void luaC_barrierback (lua_State *L, Table *t) {
   global_State *g = G(L);
   GCObject *o = obj2gco(t);
   lua_assert(isblack(o) && !isdead(g, o));
   lua_assert(g->gcstate != GCSfinalize && g->gcstate != GCSpause);
   black2gray(o);  /* make table gray (again) */
+  // 把这个table加入到grayagain链表，意思是原子扫描
   t->gclist = g->grayagain;
   g->grayagain = o;
 }

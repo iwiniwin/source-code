@@ -61,7 +61,7 @@
 */
 #define hashmod(t,n)	(gnode(t, ((n) % ((sizenode(t)-1)|1))))
 
-
+// 将指针类型转换为int类型，再进行hashmod
 #define hashpointer(t,p)	hashmod(t, IntPoint(p))
 
 
@@ -100,6 +100,8 @@ static Node *hashnum (const Table *t, lua_Number n) {
 /*
 ** returns the `main' position of an element in a table (that is, the index
 ** of its hash value)
+** 根据key的类型，返回对应hash所在链表的头节点
+** 可称为获取key对应的主位置
 */
 static Node *mainposition (const Table *t, const TValue *key) {
   switch (ttype(key)) {
@@ -120,6 +122,7 @@ static Node *mainposition (const Table *t, const TValue *key) {
 /*
 ** returns the index for `key' if `key' is an appropriate key to live in
 ** the array part of the table, -1 otherwise.
+** 如果key是数组中的合法索引则返回key，否则返回-1
 */
 static int arrayindex (const TValue *key) {
   if (ttisnumber(key)) {
@@ -137,6 +140,7 @@ static int arrayindex (const TValue *key) {
 ** returns the index of a `key' for table traversals. First goes all
 ** elements in the array part, then elements in the hash part. The
 ** beginning of a traversal is signalled by -1.
+** 根据key寻找索引，先在数组部分找，再在hash部分找
 */
 static int findindex (lua_State *L, Table *t, StkId key) {
   int i;
@@ -151,8 +155,10 @@ static int findindex (lua_State *L, Table *t, StkId key) {
       if (luaO_rawequalObj(key2tval(n), key) ||
             (ttype(gkey(n)) == LUA_TDEADKEY && iscollectable(key) &&
              gcvalue(gkey(n)) == gcvalue(key))) {
+        // 计算找到的索引在hash部分上的偏移
         i = cast_int(n - gnode(t, 0));  /* key index in hash table */
         /* hash elements are numbered after array ones */
+        // 再加上数组部分的长度，以表示是hash部分上的
         return i + t->sizearray;
       }
       else n = gnext(n);
@@ -162,12 +168,15 @@ static int findindex (lua_State *L, Table *t, StkId key) {
   }
 }
 
-
+// 根据key查找下一个部位nil的元素
 int luaH_next (lua_State *L, Table *t, StkId key) {
   int i = findindex(L, t, key);  /* find original element */
   for (i++; i < t->sizearray; i++) {  /* try first array part */
     if (!ttisnil(&t->array[i])) {  /* a non-nil value? */
+      // 将键i+1索引赋给key
       setnvalue(key, cast_num(i+1));
+      // 将值赋给当前key的下一个key
+      // key是L->top - 1，则赋给L->top
       setobj2s(L, key+1, &t->array[i]);
       return 1;
     }
@@ -189,16 +198,18 @@ int luaH_next (lua_State *L, Table *t, StkId key) {
 ** ==============================================================
 */
 
-
+// 只有利用率超过50%的数组元素会进入数组，否则进入hash部分
 static int computesizes (int nums[], int *narray) {
   int i;
   int twotoi;  /* 2^i */
   int a = 0;  /* number of elements smaller than 2^i */
   int na = 0;  /* number of elements to go to array part */
   int n = 0;  /* optimal size for array part */
+  // 循环结束后na表示可以放在数组部分的键值对个数
   for (i = 0, twotoi = 1; twotoi/2 < *narray; i++, twotoi *= 2) {
     if (nums[i] > 0) {
       a += nums[i];
+      // 如果数量已经超过一半，那么数组的大小可以设置为twotoi
       if (a > twotoi/2) {  /* more than half elements present? */
         n = twotoi;  /* optimal size (till now) */
         na = a;  /* all elements smaller than n will go to array part */
@@ -207,6 +218,7 @@ static int computesizes (int nums[], int *narray) {
     if (a == *narray) break;  /* all elements already counted */
   }
   *narray = n;
+  // *narray/2 <= na 要求利用率必须大于50%
   lua_assert(*narray/2 <= na && na <= *narray);
   return na;
 }
@@ -215,7 +227,7 @@ static int computesizes (int nums[], int *narray) {
 static int countint (const TValue *key, int *nums) {
   int k = arrayindex(key);
   if (0 < k && k <= MAXASIZE) {  /* is `key' an appropriate array index? */
-    nums[ceillog2(k)]++;  /* count as such */
+    nums[ceillog2(k)]++;  /* count as such */  // 将以 log以2为底k的对数 为索引的nums数组位置加1，计数
     return 1;
   }
   else
@@ -247,7 +259,9 @@ static int numusearray (const Table *t, int *nums) {
   return ause;
 }
 
-
+// 更新nums数组，nums[i]表示2^(i-1) 到 2^i之间key的个数
+// 更新pnasize，表示整个table中key为number的个数
+// 返回的是totaluse，表示hash部分不为nil的键值对个数
 static int numusehash (const Table *t, int *nums, int *pnasize) {
   int totaluse = 0;  /* total number of elements */
   int ause = 0;  /* summation of `nums' */
@@ -297,7 +311,7 @@ static void setnodevector (lua_State *L, Table *t, int size) {
   t->lastfree = gnode(t, size);  /* all positions are free */
 }
 
-
+// 重新分配table数组和hash部分的大小
 static void resize (lua_State *L, Table *t, int nasize, int nhsize) {
   int i;
   int oldasize = t->sizearray;
@@ -307,9 +321,10 @@ static void resize (lua_State *L, Table *t, int nasize, int nhsize) {
     setarrayvector(L, t, nasize);
   /* create new hash part with appropriate size */
   setnodevector(L, t, nhsize);  
-  if (nasize < oldasize) {  /* array part must shrink? */
+  if (nasize < oldasize) {  /* array part must shrink? */  // 收缩数组部分
     t->sizearray = nasize;
     /* re-insert elements from vanishing slice */
+    // 将多出来的数组部分插入到新分配的hash部分，以i+1为key
     for (i=nasize; i<oldasize; i++) {
       if (!ttisnil(&t->array[i]))
         setobjt2t(L, luaH_setnum(L, t, i+1), &t->array[i]);
@@ -318,6 +333,7 @@ static void resize (lua_State *L, Table *t, int nasize, int nhsize) {
     luaM_reallocvector(L, t->array, oldasize, nasize, TValue);
   }
   /* re-insert elements from hash part */
+  // 将原来hash部分部位nil的元素重新插入到hash中
   for (i = twoto(oldhsize) - 1; i >= 0; i--) {
     Node *old = nold+i;
     if (!ttisnil(gval(old)))
@@ -335,19 +351,21 @@ void luaH_resizearray (lua_State *L, Table *t, int nasize) {
 
 
 static void rehash (lua_State *L, Table *t, const TValue *ek) {
+  // nasize表示整个table中（包括数组和hash部分）key为number的键值对的个数
   int nasize, na;
+  // nums[i]表示2^(i-1) 到 2^i之间key的个数
   int nums[MAXBITS+1];  /* nums[i] = number of keys between 2^(i-1) and 2^i */
   int i;
-  int totaluse;
+  int totaluse;  // 表示整个table中的非nil的键值对个数
   for (i=0; i<=MAXBITS; i++) nums[i] = 0;  /* reset counts */
-  nasize = numusearray(t, nums);  /* count keys in array part */
-  totaluse = nasize;  /* all those keys are integer keys */
-  totaluse += numusehash(t, nums, &nasize);  /* count keys in hash part */
+  nasize = numusearray(t, nums);  /* count keys in array part */  // 计算数组部分非nil的数值的个数，并填充nums数组
+  totaluse = nasize;  /* all those keys are integer keys */   
+  totaluse += numusehash(t, nums, &nasize);  /* count keys in hash part */  // 计算hash部分非nil的键值对个数
   /* count extra key */
-  nasize += countint(ek, nums);
+  nasize += countint(ek, nums);  // 确定将要插入的key是否可以放在数组部分
   totaluse++;
   /* compute new size for array part */
-  na = computesizes(nums, &nasize);
+  na = computesizes(nums, &nasize);   // 计算数组部分应该设置的大小
   /* resize the table to new computed sizes */
   resize(L, t, nasize, totaluse - na);
 }
@@ -379,7 +397,7 @@ Table *luaH_new (lua_State *L, int narray, int nhash) {
   return t;
 }
 
-
+// 释放table
 void luaH_free (lua_State *L, Table *t) {
   if (t->node != dummynode)
     luaM_freearray(L, t->node, sizenode(t), Node);
@@ -387,7 +405,7 @@ void luaH_free (lua_State *L, Table *t) {
   luaM_free(L, t);
 }
 
-
+// 从node数组尾部开始查找一个空闲的node
 static Node *getfreepos (Table *t) {
   while (t->lastfree-- > t->node) {
     if (ttisnil(gkey(t->lastfree)))
@@ -404,33 +422,40 @@ static Node *getfreepos (Table *t) {
 ** position or not: if it is not, move colliding node to an empty place and 
 ** put new key in its main position; otherwise (colliding node is in its main 
 ** position), new key goes to an empty position. 
+** 根据key新建一个键，并返回值
+** 总体思路是先通过key获取其的主位置main position，记为mp，如果主位置上已经有节点了
+** 则通过计算该节点的主位置与mp是否相等来判断其是不是应该在这里
+** 如果该节点确实应该在这里，则将一个空闲节点插入到主位置链表的首位，这个空闲节点就是新建的key的节点
+** 如果该节点不应该在这里，则将该节点移动到空闲节点去，将mp的数据置为空，mp就是新建key的节点
 */
 static TValue *newkey (lua_State *L, Table *t, const TValue *key) {
   Node *mp = mainposition(t, key);
-  if (!ttisnil(gval(mp)) || mp == dummynode) {
+  if (!ttisnil(gval(mp)) || mp == dummynode) {    // 如果key的主位置已经有节点了
     Node *othern;
     Node *n = getfreepos(t);  /* get a free place */
-    if (n == NULL) {  /* cannot find a free place? */
+    if (n == NULL) {  /* cannot find a free place? */  // 预先准备好的hash部分已经使用完毕了，rehash
       rehash(L, t, key);  /* grow table */
       return luaH_set(L, t, key);  /* re-insert key into grown table */
     }
     lua_assert(n != dummynode);
-    othern = mainposition(t, key2tval(mp));
-    if (othern != mp) {  /* is colliding node out of its main position? */
+    othern = mainposition(t, key2tval(mp));   // 计算占用了当前主位置的节点自己的主位置
+    if (othern != mp) {  /* is colliding node out of its main position? */  // 如果冲突节点不是在自己的主位置上
       /* yes; move colliding node into free position */
-      while (gnext(othern) != mp) othern = gnext(othern);  /* find previous */
+      while (gnext(othern) != mp) othern = gnext(othern);  /* find previous */  // 将冲突节点移动到自己主位置链表的末尾
       gnext(othern) = n;  /* redo the chain with `n' in place of `mp' */
       *n = *mp;  /* copy colliding node into free pos. (mp->next also goes) */
       gnext(mp) = NULL;  /* now `mp' is free */
       setnilvalue(gval(mp));
     }
-    else {  /* colliding node is in its own main position */
+    else {  /* colliding node is in its own main position */  // 冲突节点就是在自己的主位置上
       /* new node will go into free position */
+      // 先将空闲节点插入到主位置链表的首位
       gnext(n) = gnext(mp);  /* chain new position */
       gnext(mp) = n;
       mp = n;
     }
   }
+  // 设置key的值和类型
   gkey(mp)->value = key->value; gkey(mp)->tt = key->tt;
   luaC_barriert(L, t, key);
   lua_assert(ttisnil(gval(mp)));
@@ -443,16 +468,18 @@ static TValue *newkey (lua_State *L, Table *t, const TValue *key) {
 */
 const TValue *luaH_getnum (Table *t, int key) {
   /* (1 <= key && key <= t->sizearray) */
+  // 将int类型强制转换为unsigned int后再比较大小，可以省略值<0情况的判断
+  // 因为负数的int类型转换为unsigned int（最高位是1）后一定大于int类型（正数最高只能是0）
   if (cast(unsigned int, key-1) < cast(unsigned int, t->sizearray))
     return &t->array[key-1];
   else {
     lua_Number nk = cast_num(key);
-    Node *n = hashnum(t, nk);
+    Node *n = hashnum(t, nk);  // 求nk的hash值
     do {  /* check whether `key' is somewhere in the chain */
       if (ttisnumber(gkey(n)) && luai_numeq(nvalue(gkey(n)), nk))
         return gval(n);  /* that's it */
       else n = gnext(n);
-    } while (n);
+    } while (n);  // 遍历hash链表
     return luaO_nilobject;
   }
 }
@@ -474,13 +501,16 @@ const TValue *luaH_getstr (Table *t, TString *key) {
 
 /*
 ** main search function
-** table的查找方法，t[key]是触发
+** table的查找方法，t[key]时触发
+** 总体思路是如果key是number且在数组部分，则直接根据索引返回数组内元素
+** 否则，首先根据key求得hash值（不同类型的key有不同的求取方法）
+** 通过hash值获取所在链表的头结点，遍历链表，找到含有key的元素
 */
 const TValue *luaH_get (Table *t, const TValue *key) {
   switch (ttype(key)) {
     case LUA_TNIL: return luaO_nilobject;  // key是nil，返回nil
-    case LUA_TSTRING: return luaH_getstr(t, rawtsvalue(key));
-    case LUA_TNUMBER: {
+    case LUA_TSTRING: return luaH_getstr(t, rawtsvalue(key));  // key是string
+    case LUA_TNUMBER: {   // key是number
       int k;
       lua_Number n = nvalue(key);
       lua_number2int(k, n);
@@ -500,33 +530,37 @@ const TValue *luaH_get (Table *t, const TValue *key) {
   }
 }
 
-
+// key为 TValue* 类型的set操作
+// 返回的是key所在节点的Value，通过返回值再设置value
 TValue *luaH_set (lua_State *L, Table *t, const TValue *key) {
   const TValue *p = luaH_get(t, key);
   t->flags = 0;
-  if (p != luaO_nilobject)
+  if (p != luaO_nilobject)    // 如果key存在则返回值
     return cast(TValue *, p);
   else {
     if (ttisnil(key)) luaG_runerror(L, "table index is nil");
-    else if (ttisnumber(key) && luai_numisnan(nvalue(key)))
+    else if (ttisnumber(key) && luai_numisnan(nvalue(key)))  // 如果key是number类型且是Nan
       luaG_runerror(L, "table index is NaN");
-    return newkey(L, t, key);
+    return newkey(L, t, key);   // 新建一个key并返回值
   }
 }
 
 
+// 以key为数字的set操作
+// 返回的是key所在节点的Value，通过返回值再设置value
 TValue *luaH_setnum (lua_State *L, Table *t, int key) {
   const TValue *p = luaH_getnum(t, key);
-  if (p != luaO_nilobject)
+  if (p != luaO_nilobject)  // 如果key是数组部分的索引，则直接返回值
     return cast(TValue *, p);
-  else {
+  else {    // 在hash部分新建key
     TValue k;
     setnvalue(&k, cast_num(key));
     return newkey(L, t, &k);
   }
 }
 
-
+// 以key为字符串的set操作
+// 返回的是key所在节点的Value，通过返回值再设置value
 TValue *luaH_setstr (lua_State *L, Table *t, TString *key) {
   const TValue *p = luaH_getstr(t, key);
   if (p != luaO_nilobject)

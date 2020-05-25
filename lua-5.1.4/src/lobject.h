@@ -104,6 +104,7 @@ typedef struct lua_TValue {
 #define uvalue(o)	(&rawuvalue(o)->uv)
 #define clvalue(o)	check_exp(ttisfunction(o), &(o)->value.gc->cl)
 #define hvalue(o)	check_exp(ttistable(o), &(o)->value.gc->h)
+// 获取TValue中的bool
 #define bvalue(o)	check_exp(ttisboolean(o), (o)->value.b)
 #define thvalue(o)	check_exp(ttisthread(o), &(o)->value.gc->th)
 
@@ -164,7 +165,7 @@ typedef struct lua_TValue {
 
 
 
-
+// 将obj2复制给obj1
 #define setobj(L,obj1,obj2) \
   { const TValue *o2=(obj2); TValue *o1=(obj1); \
     o1->value = o2->value; o1->tt=o2->tt; \
@@ -192,7 +193,7 @@ typedef struct lua_TValue {
 
 #define setttype(obj, tt) (ttype(obj) = (tt))
 
-
+// 判断对象是否是可回收数据
 #define iscollectable(o)	(ttype(o) >= LUA_TSTRING)
 
 
@@ -325,6 +326,7 @@ typedef union Closure {
 
 /*
 ** Tables
+** TKey是union，所以nk.TValuefields与tvk表示的都是key的值
 */
 
 typedef union TKey {
@@ -348,7 +350,7 @@ typedef struct Table {
   lu_byte lsizenode;  /* log2 of size of `node' array */  // 哈希表大小取log2 [2^lsizenode即为哈希表大小]
   struct Table *metatable;
   TValue *array;  /* array part */  // table的数组部分
-  Node *node;                       // table的哈希表部分  每个Node都是一个键值对
+  Node *node;                       // table的哈希表部分，指向hash表起始位置  每个Node都是一个键值对
   Node *lastfree;  /* any free position is before this position */  // 链表的最后一个空元素
   GCObject *gclist;
   int sizearray;  /* size of `array' array */
@@ -381,7 +383,7 @@ LUAI_DATA const TValue luaO_nilobject_;
 LUAI_FUNC int luaO_log2 (unsigned int x);
 LUAI_FUNC int luaO_int2fb (unsigned int x);
 LUAI_FUNC int luaO_fb2int (int x);
-LUAI_FUNC int luaO_rawequalObj (const TValue *t1, const TValue *t2);
+LUAI_FUNC int luaO_rawequalObj (const TValue *t1, const TValue *t2);  // 比较两个TValue对象是否相等
 LUAI_FUNC int luaO_str2d (const char *s, lua_Number *result);
 LUAI_FUNC const char *luaO_pushvfstring (lua_State *L, const char *fmt,
                                                        va_list argp);

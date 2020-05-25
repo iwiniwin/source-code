@@ -67,6 +67,9 @@
 #define isgray(x)	(!isblack(x) && !iswhite(x))
 
 #define otherwhite(g)	(g->currentwhite ^ WHITEBITS)
+
+// 如果节点的白色是otherwhite，那么就是一个死节点
+// 这个函数是在mark阶段过后使用的，所以此时的otherwhite其实就是本次GC的白色
 #define isdead(g,v)	((v)->gch.marked & otherwhite(g) & WHITEBITS)
 
 #define changewhite(x)	((x)->gch.marked ^= WHITEBITS)

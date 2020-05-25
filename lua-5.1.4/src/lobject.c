@@ -68,7 +68,7 @@ int luaO_log2 (unsigned int x) {
 
 }
 
-
+// 比较两个TValue对象是否相等
 int luaO_rawequalObj (const TValue *t1, const TValue *t2) {
   if (ttype(t1) != ttype(t2)) return 0;
   else switch (ttype(t1)) {
