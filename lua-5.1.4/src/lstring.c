@@ -60,19 +60,20 @@ static TString *newlstr (lua_State *L, const char *str, size_t l,
   ts->tsv.tt = LUA_TSTRING;  // 设置字符串类型
   ts->tsv.reserved = 0;
   memcpy(ts+1, str, l*sizeof(char));  // 拷贝字符串，从 str 复制 l*sizeof(char) 个字节到 ts+1
-  ((char *)(ts+1))[l] = '\0';  /* ending 0 */
+  ((char *)(ts+1))[l] = '\0';  /* ending 0 */  // 按照c风格存放，以兼容c接口
   tb = &G(L)->strt;
   h = lmod(h, tb->size);  // 对hash值求余作为索引
   ts->tsv.next = tb->hash[h];  /* chain new entry */
   tb->hash[h] = obj2gco(ts);  // 将新创建的字符串添加到全局字符串表中
   tb->nuse++;
-  // 如果全局字符串表中的元素数量超过了hash桶数组大小并且桶数量未超过MAX_INT的一半，就成倍扩充
+  // 如果全局字符串表中的元素数量超过了hash桶数组大小，如果不resize会发生冲突
+  // 并且桶数量未超过MAX_INT的一半，就成倍扩充
   if (tb->nuse > cast(lu_int32, tb->size) && tb->size <= MAX_INT/2)
     luaS_resize(L, tb->size*2);  /* too crowded */
   return ts;
 }
 
-
+// 申请新的字符串
 TString *luaS_newlstr (lua_State *L, const char *str, size_t l) {
   GCObject *o;
   unsigned int h = cast(unsigned int, l);  /* seed */
@@ -87,6 +88,7 @@ TString *luaS_newlstr (lua_State *L, const char *str, size_t l) {
 	// 比较是否是目标字符串，memcmp比较内存的前l个字节
     if (ts->tsv.len == l && (memcmp(str, getstr(ts), l) == 0)) {
       /* string may be dead */
+	  // 由于lua的垃圾收集过程是分步完成的，而添加新字符串在任何步骤之间都有可能发生
       if (isdead(G(L), o)) changewhite(o); // 如果是死的字符串，则恢复白的身份
       return ts;
     }
@@ -95,7 +97,8 @@ TString *luaS_newlstr (lua_State *L, const char *str, size_t l) {
   return newlstr(L, str, l, h);  /* not found */
 }
 
-
+// 申请新的userdata
+// userdata在存储形式上和字符串相似，可以看成是拥有独立元表，不被内部化处理，也不需要追加\0的字符串
 Udata *luaS_newudata (lua_State *L, size_t s, Table *e) {
   Udata *u;
   if (s > MAX_SIZET - sizeof(Udata))

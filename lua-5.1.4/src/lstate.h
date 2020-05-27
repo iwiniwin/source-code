@@ -35,10 +35,12 @@ struct lua_longjmp;  /* defined in ldo.c */
 
 
 // 字符串表
+// 由于全局只有一个，不用太考虑空间利用率
+// 所以采用的是开散列算法，即将哈希值相同的对象串在分别独立的链表中，实现起来更为简单
 typedef struct stringtable {
-  GCObject **hash;  // GCObject *数组的地址
+  GCObject **hash;  // GCObject *数组的地址，散列桶，桶中存的是相同hash值的TString链表
   lu_int32 nuse;  /* number of elements */  
-  int size;  // hash桶数组大小
+  int size;  // hash桶大小
 } stringtable;
 
 

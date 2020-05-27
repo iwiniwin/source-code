@@ -223,7 +223,7 @@ typedef union TString {
 #define svalue(o)       getstr(rawtsvalue(o))
 
 
-
+// userdata的头部，数据部分紧随其后
 typedef union Udata {
   L_Umaxalign dummy;  /* ensures maximum alignment for `local' udata */
   struct {
