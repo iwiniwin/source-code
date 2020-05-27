@@ -39,6 +39,9 @@ typedef union GCObject GCObject;
 /*
 ** Common Header for all collectable objects (in macro form, to be
 ** included in other objects)
+** next		GCObject指针
+** tt		数据类型
+** marked	垃圾回收标志
 */
 #define CommonHeader	GCObject *next; lu_byte tt; lu_byte marked
 
@@ -203,9 +206,10 @@ typedef TValue *StkId;  /* index to stack elements */
 
 /*
 ** String headers for string table
+** 只是字符串对象的头部数据，真正的字符串数据是紧随其后保存
 */
 typedef union TString {
-  L_Umaxalign dummy;  /* ensures maximum alignment for strings */
+  L_Umaxalign dummy;  /* ensures maximum alignment for strings */  // 保证与最大长度的C类型对齐，目的是通过内存对齐，加快CPU访问内存的速度
   struct {
     CommonHeader;
     lu_byte reserved;     // 是否是保留字
@@ -214,7 +218,7 @@ typedef union TString {
   } tsv;
 } TString;
 
-
+// 获取到实际的C字符串指针
 #define getstr(ts)	cast(const char *, (ts) + 1)
 #define svalue(o)       getstr(rawtsvalue(o))
 

@@ -16,7 +16,7 @@
 */
 #define GCSpause	0
 #define GCSpropagate	1
-#define GCSsweepstring	2
+#define GCSsweepstring	2  // 回收字符串状态
 #define GCSsweep	3
 #define GCSfinalize	4
 

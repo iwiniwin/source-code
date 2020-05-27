@@ -34,11 +34,11 @@ struct lua_longjmp;  /* defined in ldo.c */
 #define BASIC_STACK_SIZE        (2*LUA_MINSTACK)
 
 
-
+// 字符串表
 typedef struct stringtable {
-  GCObject **hash;
-  lu_int32 nuse;  /* number of elements */
-  int size;
+  GCObject **hash;  // GCObject *数组的地址
+  lu_int32 nuse;  /* number of elements */  
+  int size;  // hash桶数组大小
 } stringtable;
 
 
@@ -66,7 +66,7 @@ typedef struct CallInfo {
 ** `global state', shared by all threads of this state
 */
 typedef struct global_State {
-  stringtable strt;  /* hash table for strings */
+  stringtable strt;  /* hash table for strings */  // 全局的字符串表
   lua_Alloc frealloc;  /* function to reallocate memory */  // 申请内存的函数指针
   void *ud;         /* auxiliary data to `frealloc' */
   lu_byte currentwhite;
@@ -102,7 +102,7 @@ struct lua_State {
   lu_byte status;
   StkId top;  /* first free slot in the stack */
   StkId base;  /* base of current function */
-  global_State *l_G;
+  global_State *l_G;  // 全局状态机
   CallInfo *ci;  /* call info for current function */
   const Instruction *savedpc;  /* `savedpc' of current function */
   StkId stack_last;  /* last free slot in the stack */
@@ -126,7 +126,7 @@ struct lua_State {
   ptrdiff_t errfunc;  /* current error handling function (stack index) */
 };
 
-
+// lua_State - > global_State
 #define G(L)	(L->l_G)
 
 
@@ -146,7 +146,9 @@ union GCObject {
 
 
 /* macros to convert a GCObject into a specific value */
+// GCObject -> TString
 #define rawgco2ts(o)	check_exp((o)->gch.tt == LUA_TSTRING, &((o)->ts))
+// GCObject -> TString - > tsv struct
 #define gco2ts(o)	(&rawgco2ts(o)->tsv)
 #define rawgco2u(o)	check_exp((o)->gch.tt == LUA_TUSERDATA, &((o)->u))
 #define gco2u(o)	(&rawgco2u(o)->uv)
