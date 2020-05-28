@@ -13,12 +13,13 @@
 
 /*
 ** Possible states of the Garbage Collector
+** 状态值的大小也表示了它们的执行顺序
 */
-#define GCSpause	0
-#define GCSpropagate	1
+#define GCSpause	0  // 每个gc流程的起始步骤，只是标记系统的根节点
+#define GCSpropagate	1  // 标记流程
 #define GCSsweepstring	2  // 回收字符串状态
-#define GCSsweep	3
-#define GCSfinalize	4
+#define GCSsweep	3  // 回收除字符串外的其他类型
+#define GCSfinalize	4  // 此阶段处理需要调用gc方法的userdata对象
 
 
 /*

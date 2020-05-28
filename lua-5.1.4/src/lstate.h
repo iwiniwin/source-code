@@ -72,9 +72,9 @@ typedef struct global_State {
   lua_Alloc frealloc;  /* function to reallocate memory */  // 申请内存的函数指针
   void *ud;         /* auxiliary data to `frealloc' */
   lu_byte currentwhite;
-  lu_byte gcstate;  /* state of garbage collector */
+  lu_byte gcstate;  /* state of garbage collector */ // 表示gc处于哪个阶段
   int sweepstrgc;  /* position of sweep in `strt' */
-  GCObject *rootgc;  /* list of all collectable objects */
+  GCObject *rootgc;  /* list of all collectable objects */  // 出string类型之外的GCObject链表头
   GCObject **sweepgc;  /* position of sweep in `rootgc' */
   GCObject *gray;  /* list of gray objects */
   GCObject *grayagain;  /* list of objects to be traversed atomically */
@@ -82,8 +82,8 @@ typedef struct global_State {
   GCObject *tmudata;  /* last element of list of userdata to be GC */
   Mbuffer buff;  /* temporary buffer for string concatentation */
   lu_mem GCthreshold;
-  lu_mem totalbytes;  /* number of bytes currently allocated */
-  lu_mem estimate;  /* an estimate of number of bytes actually in use */
+  lu_mem totalbytes;  /* number of bytes currently allocated */  // lua vm实际分配的字节数
+  lu_mem estimate;  /* an estimate of number of bytes actually in use */  // 估算值，lua vm占用的内存字节数
   lu_mem gcdept;  /* how much GC is `behind schedule' */
   int gcpause;  /* size of pause between successive GCs */
   int gcstepmul;  /* GC `granularity' */
@@ -98,13 +98,15 @@ typedef struct global_State {
 
 /*
 ** `per thread' state
+** 表示lua虚拟机线程的状态
+** 完整的lua虚拟机运行时，可能有多个lua_State，即多个线程
 */
 struct lua_State {
   CommonHeader;
   lu_byte status;
   StkId top;  /* first free slot in the stack */
   StkId base;  /* base of current function */
-  global_State *l_G;  // 全局状态机
+  global_State *l_G;  // 多个线程共享的数据放在global_State域
   CallInfo *ci;  /* call info for current function */
   const Instruction *savedpc;  /* `savedpc' of current function */
   StkId stack_last;  /* last free slot in the stack */

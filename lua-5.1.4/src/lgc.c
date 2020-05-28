@@ -25,7 +25,7 @@
 
 #define GCSTEPSIZE	1024u
 #define GCSWEEPMAX	40
-#define GCSWEEPCOST	10
+#define GCSWEEPCOST	10  // 表示GC的进度
 #define GCFINALIZECOST	100
 
 
@@ -125,6 +125,7 @@ static void marktmu (global_State *g) {
 
 
 /* move `dead' udata that need finalization to list `tmudata' */
+// 把所有带gc方法的userdata挑出来，放到tmudata循环链表中
 size_t luaC_separateudata (lua_State *L, int all) {
   global_State *g = G(L);
   size_t deadmem = 0;
@@ -503,11 +504,11 @@ static void markroot (lua_State *L) {
   g->gray = NULL;
   g->grayagain = NULL;
   g->weak = NULL;
-  markobject(g, g->mainthread);
+  markobject(g, g->mainthread);  // 标记主线程对象
   /* make global table be traversed before main stack */
-  markvalue(g, gt(g->mainthread));
-  markvalue(g, registry(L));
-  markmt(g);
+  markvalue(g, gt(g->mainthread));  // 标记主线程的全局表
+  markvalue(g, registry(L));  // 标记主线程的注册表
+  markmt(g);  // 标记为全局类型注册的元表
   g->gcstate = GCSpropagate;
 }
 
@@ -521,7 +522,7 @@ static void remarkupvals (global_State *g) {
   }
 }
 
-
+// 不可被打断的标记操作
 static void atomic (lua_State *L) {
   global_State *g = G(L);
   size_t udsize;  /* total size of userdata to be finalized */
@@ -541,7 +542,7 @@ static void atomic (lua_State *L) {
   g->grayagain = NULL;
   propagateall(g);
   udsize = luaC_separateudata(L, 0);  /* separate userdata to be finalized */
-  marktmu(g);  /* mark `preserved' userdata */
+  marktmu(g);  /* mark `preserved' userdata */  // 需要调用gc方法的userdata在当个gc循环是不能被直接清除的，所以在mark环节最后，需要重新mark为不可清除节点
   udsize += propagateall(g);  /* remark, to propagate `preserveness' */
   cleartable(g->weak);  /* remove collected objects from weak tables */
   /* flip current white */
@@ -571,7 +572,7 @@ static l_mem singlestep (lua_State *L) {
     }
     case GCSsweepstring: {
       lu_mem old = g->totalbytes;
-      sweepwholelist(L, &g->strt.hash[g->sweepstrgc++]);
+      sweepwholelist(L, &g->strt.hash[g->sweepstrgc++]);  // 每个step清理hash表的一列
       if (g->sweepstrgc >= g->strt.size)  /* nothing more to sweep? */
         g->gcstate = GCSsweep;  /* end sweep-string phase */
       lua_assert(old >= g->totalbytes);
@@ -687,16 +688,19 @@ void luaC_barrierback (lua_State *L, Table *t) {
   g->grayagain = o;
 }
 
-
+// 将对象加入到GC链表上
 void luaC_link (lua_State *L, GCObject *o, lu_byte tt) {
-  global_State *g = G(L);
+  global_State *g = G(L); 
+  // 头插法挂接到全局域上
   o->gch.next = g->rootgc;
   g->rootgc = o;
   o->gch.marked = luaC_white(g);
   o->gch.tt = tt;
 }
 
-
+// UpVal也是一个GCObject，这里需要被特殊处理
+// 因为Lua的GC可以分步扫描，别的类型被新创建时，都可以直接作为一个白色节点（新节点）挂接在整个系统中
+// 但upvalue确实对已有的对象的间接引用，不是新数据，一旦GC在mark的过程中（GCSpropagate），则需增加屏障
 void luaC_linkupval (lua_State *L, UpVal *uv) {
   global_State *g = G(L);
   GCObject *o = obj2gco(uv);

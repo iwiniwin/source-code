@@ -110,6 +110,10 @@ Udata *luaS_newudata (lua_State *L, size_t s, Table *e) {
   u->uv.metatable = NULL;
   u->uv.env = e;
   /* chain it on udata list (after main thread) */
+  // 把Udata对象直接挂在mainthread之后，而不是通过luaC_link挂到GC链表上
+  // 由于luaC_link都是通过头插法挂载，所以G(L)->mainthread其实一直就是GC链表上的最后一个节点（除Udata以外）
+  // 这样就相当于Udata都被挂载到了其他类型之后
+  // 这样做的理由是所有userdata都可能有gc方法，需要统一去调用这些gc方法，则应该有一个途径来单独遍历所有的userdata
   u->uv.next = G(L)->mainthread->next;
   G(L)->mainthread->next = obj2gco(u);
   return u;
