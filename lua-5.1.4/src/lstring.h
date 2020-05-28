@@ -21,6 +21,7 @@
 #define luaS_newliteral(L, s)	(luaS_newlstr(L, "" s, \
                                  (sizeof(s)/sizeof(char))-1))
 
+// 将一个字符串设置为被保护的
 #define luaS_fix(s)	l_setbit((s)->tsv.marked, FIXEDBIT)
 
 LUAI_FUNC void luaS_resize (lua_State *L, int newsize);

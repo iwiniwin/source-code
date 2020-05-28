@@ -71,7 +71,7 @@ typedef struct global_State {
   stringtable strt;  /* hash table for strings */  // 全局的字符串表
   lua_Alloc frealloc;  /* function to reallocate memory */  // 申请内存的函数指针
   void *ud;         /* auxiliary data to `frealloc' */
-  lu_byte currentwhite;
+  lu_byte currentwhite;  // 指示当前的白色是0型还是1型
   lu_byte gcstate;  /* state of garbage collector */ // 表示gc处于哪个阶段
   int sweepstrgc;  /* position of sweep in `strt' */
   GCObject *rootgc;  /* list of all collectable objects */  // 出string类型之外的GCObject链表头
@@ -92,7 +92,9 @@ typedef struct global_State {
   struct lua_State *mainthread;
   UpVal uvhead;  /* head of double-linked list of all open upvalues */
   struct Table *mt[NUM_TAGS];  /* metatables for basic types */
-  TString *tmname[TM_N];  /* array with tag-method names */
+  TString *tmname[TM_N];  /* array with tag-method names */  // 以TString指针的方式记录所有元方法的名字  
+															 // lua的gc算法并不做内存整理，它不会在内存迁移数据，所以如果一个string肯定不会被清除
+															 // 那么它的内存地址也是不变的
 } global_State;
 
 

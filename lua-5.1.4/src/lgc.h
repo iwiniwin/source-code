@@ -41,13 +41,17 @@
 
 /*
 ** Layout for bit use in `marked' field:
-** bit 0 - object is white (type 0)
-** bit 1 - object is white (type 1)
+** bit 0 - object is white (type 0)  // 一开始所有节点都是白色的，新创建出来的节点也被默认设置为白色
+** bit 1 - object is white (type 1)  // 当处于清理流程中时，如果对象发生了变化，比如增加了一个对象，安全的方法是将其标记为不可清理即黑色
+									 // 但清理过程结束后需要把所有对象置回白色，lua实际上是单遍扫描，处理完一个节点重置一个节点的颜色
+									 // 所以如果简单的把对象设置为黑色，可能导致它再也没机会变回白色，所以引入第三种状态white1
 ** bit 2 - object is black
-** bit 3 - for userdata: has been finalized
-** bit 3 - for tables: has weak keys
-** bit 4 - for tables: has weak values
-** bit 5 - object is fixed (should not be collected)
+** bit 3 - for userdata: has been finalized  // 用于标记userdata，当userdata确认不被引用，则设置上这个标记
+											 // 它与颜色标记不同，是用于保证userdata的gc元方法不被反复调用
+** bit 3 - for tables: has weak keys  // 标记table的weak属性
+** bit 4 - for tables: has weak values  // 标记table的weak属性
+** bit 5 - object is fixed (should not be collected)  // 保证一个GCObject不会再GC过程中被清除，为什么要有这种状态？
+													  // lua本身会用到一个字符串，它们可能不被任何地方引用，但又希望这个字符串反复生成，通过设置fixed保护这个字符串
 ** bit 6 - object is "super" fixed (only the main thread)
 */
 
@@ -55,7 +59,7 @@
 #define WHITE0BIT	0
 #define WHITE1BIT	1
 #define BLACKBIT	2
-#define FINALIZEDBIT	3
+#define FINALIZEDBIT	3  
 #define KEYWEAKBIT	3
 #define VALUEWEAKBIT	4
 #define FIXEDBIT	5
@@ -67,6 +71,7 @@
 #define isblack(x)      testbit((x)->gch.marked, BLACKBIT)
 #define isgray(x)	(!isblack(x) && !iswhite(x))
 
+// 乒乓切换，取另外一种白色，如果是white0就返回white1，是white1就返回white0
 #define otherwhite(g)	(g->currentwhite ^ WHITEBITS)
 
 // 如果节点的白色是otherwhite，那么就是一个死节点
@@ -78,6 +83,7 @@
 
 #define valiswhite(x)	(iscollectable(x) && iswhite(gcvalue(x)))
 
+// 获取当前的白色类型
 #define luaC_white(g)	cast(lu_byte, (g)->currentwhite & WHITEBITS)
 
 

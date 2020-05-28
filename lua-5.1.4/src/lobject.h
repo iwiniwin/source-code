@@ -41,7 +41,7 @@ typedef union GCObject GCObject;
 ** included in other objects)
 ** next		GCObject指针，所有的GCObject都用单向链表串联了起来
 ** tt		数据类型
-** marked	垃圾回收标志
+** marked	垃圾回收标记，颜色值
 */
 #define CommonHeader	GCObject *next; lu_byte tt; lu_byte marked
 

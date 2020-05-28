@@ -60,12 +60,12 @@ static void save (LexState *ls, int c) {
   b->buffer[b->n++] = cast(char, c);
 }
 
-
+// 初始化关键字
 void luaX_init (lua_State *L) {
   int i;
   for (i=0; i<NUM_RESERVED; i++) {
     TString *ts = luaS_new(L, luaX_tokens[i]);
-    luaS_fix(ts);  /* reserved words are never collected */
+    luaS_fix(ts);  /* reserved words are never collected */  // 关键字被设置为保护的
     lua_assert(strlen(luaX_tokens[i])+1 <= TOKEN_LEN);
     ts->tsv.reserved = cast_byte(i+1);  /* reserved word */
   }
