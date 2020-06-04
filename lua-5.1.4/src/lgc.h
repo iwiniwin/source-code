@@ -52,7 +52,7 @@
 ** bit 4 - for tables: has weak values  // 标记table的weak属性
 ** bit 5 - object is fixed (should not be collected)  // 保证一个GCObject不会再GC过程中被清除，为什么要有这种状态？
 													  // lua本身会用到一个字符串，它们可能不被任何地方引用，但又希望这个字符串反复生成，通过设置fixed保护这个字符串
-** bit 6 - object is "super" fixed (only the main thread)
+** bit 6 - object is "super" fixed (only the main thread)  // 专门用于标记mainthread，一切的起点
 */
 
 
@@ -86,7 +86,8 @@
 // 获取当前的白色类型
 #define luaC_white(g)	cast(lu_byte, (g)->currentwhite & WHITEBITS)
 
-
+// 用于自动GC
+// 保证GC可以随内存使用增加而自动进行
 #define luaC_checkGC(L) { \
   condhardstacktests(luaD_reallocstack(L, L->stacksize - EXTRA_STACK - 1)); \
   if (G(L)->totalbytes >= G(L)->GCthreshold) \

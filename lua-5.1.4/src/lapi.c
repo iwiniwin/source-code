@@ -894,6 +894,7 @@ LUA_API int  lua_status (lua_State *L) {
 
 /*
 ** Garbage-collection function
+** 一切和GC打交道的都通过lua_gc
 */
 
 LUA_API int lua_gc (lua_State *L, int what, int data) {
@@ -903,6 +904,7 @@ LUA_API int lua_gc (lua_State *L, int what, int data) {
   g = G(L);
   switch (what) {
     case LUA_GCSTOP: {
+	  // 设置一个很大的阙值来停止GC
       g->GCthreshold = MAX_LUMEM;
       break;
     }
@@ -911,6 +913,7 @@ LUA_API int lua_gc (lua_State *L, int what, int data) {
       break;
     }
     case LUA_GCCOLLECT: {
+	  // 完整GC
       luaC_fullgc(L);
       break;
     }
@@ -923,13 +926,15 @@ LUA_API int lua_gc (lua_State *L, int what, int data) {
       res = cast_int(g->totalbytes & 0x3ff);
       break;
     }
-    case LUA_GCSTEP: {
-      lu_mem a = (cast(lu_mem, data) << 10);
+    case LUA_GCSTEP: 
+	  // data可以理解为需要处理的字节数量（以k bytes为单位）
+      lu_mem a = (cast(lu_mem, data) << 10);  // 放大1024倍
       if (a <= g->totalbytes)
         g->GCthreshold = g->totalbytes - a;
       else
         g->GCthreshold = 0;
       while (g->GCthreshold <= g->totalbytes) {
+		// 分步GC
         luaC_step(L);
         if (g->gcstate == GCSpause) {  /* end of cycle? */
           res = 1;  /* signal it */
@@ -939,6 +944,7 @@ LUA_API int lua_gc (lua_State *L, int what, int data) {
       break;
     }
     case LUA_GCSETPAUSE: {
+	  // 设置gcpause,gcpause会影响threshold，一旦内存使用量超过threshold就会触发gc操作
       res = g->gcpause;
       g->gcpause = data;
       break;

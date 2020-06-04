@@ -65,26 +65,26 @@ static void removeentry (Node *n) {
     setttype(gkey(n), LUA_TDEADKEY);  /* dead key; remove it */
 }
 
-
+// 根据object的类型标记它
 static void reallymarkobject (global_State *g, GCObject *o) {
   lua_assert(iswhite(o) && !isdead(g, o));
-  white2gray(o);
+  white2gray(o);  // 先把对象设置为灰色，当对象的所有关联对象都被标记后，再从灰色转回黑色
   switch (o->gch.tt) {
-    case LUA_TSTRING: {
+    case LUA_TSTRING: {  // TSTRING一定没有没有对象，所以不需要再转回黑色，只要不是白色就可以清理
       return;
     }
     case LUA_TUSERDATA: {
       Table *mt = gco2u(o)->metatable;
       gray2black(o);  /* udata are never gray */
-      if (mt) markobject(g, mt);
-      markobject(g, gco2u(o)->env);
+      if (mt) markobject(g, mt);  // 标记userdata的元表
+      markobject(g, gco2u(o)->env);  // 标记userdata的环境表
       return;
     }
     case LUA_TUPVAL: {
       UpVal *uv = gco2uv(o);
       markvalue(g, uv->v);
       if (uv->v == &uv->u.value)  /* closed? */
-        gray2black(o);  /* open upvalues are never black */
+        gray2black(o);  /* open upvalues are never black */  // open状态的TUPVAL留为灰色待处理，因为open TUPVAL是易变的，无法预料在mark流程走完前，堆栈上被引用的数据会不会发生变化
       return;
     }
     case LUA_TFUNCTION: {
@@ -501,9 +501,9 @@ static void markmt (global_State *g) {
 /* mark root set */
 static void markroot (lua_State *L) {
   global_State *g = G(L);
-  g->gray = NULL;
-  g->grayagain = NULL;
-  g->weak = NULL;
+  g->gray = NULL;  // 灰色节点集
+  g->grayagain = NULL;  // 保存需要原子操作标记的灰色节点
+  g->weak = NULL;  // 保存需要清理的weak表
   markobject(g, g->mainthread);  // 标记主线程对象
   /* make global table be traversed before main stack */
   markvalue(g, gt(g->mainthread));  // 标记主线程的全局表
@@ -545,15 +545,16 @@ static void atomic (lua_State *L) {
   marktmu(g);  /* mark `preserved' userdata */  // 需要调用gc方法的userdata在当个gc循环是不能被直接清除的，所以在mark环节最后，需要重新mark为不可清除节点
   udsize += propagateall(g);  /* remark, to propagate `preserveness' */
   cleartable(g->weak);  /* remove collected objects from weak tables */
-  /* flip current white */
+  /* flip current white */  // 反转白色
   g->currentwhite = cast_byte(otherwhite(g));
   g->sweepstrgc = 0;
   g->sweepgc = &g->rootgc;
   g->gcstate = GCSsweepstring;
-  g->estimate = g->totalbytes - udsize;  /* first estimate */
+  g->estimate = g->totalbytes - udsize;  /* first estimate */  
 }
 
-
+// 一个简单的状态机，gc状态从一个状态切换到下一个状态
+// 返回值决定了GC的进度
 static l_mem singlestep (lua_State *L) {
   global_State *g = G(L);
   /*lua_checkmemory(L);*/
@@ -564,7 +565,7 @@ static l_mem singlestep (lua_State *L) {
     }
     case GCSpropagate: {
       if (g->gray)
-        return propagatemark(g);
+        return propagatemark(g);  // 处理gray链
       else {  /* no more `gray' objects */
         atomic(L);  /* finish mark phase */
         return 0;
@@ -610,7 +611,7 @@ static l_mem singlestep (lua_State *L) {
 
 void luaC_step (lua_State *L) {
   global_State *g = G(L);
-  l_mem lim = (GCSTEPSIZE/100) * g->gcstepmul;
+  l_mem lim = (GCSTEPSIZE/100) * g->gcstepmul;  // lim表示大致要标记的数据大小，当gcstepmul = 100时，即标记1k的数据
   if (lim == 0)
     lim = (MAX_LUMEM-1)/2;  /* no limit */
   g->gcdept += g->totalbytes - g->GCthreshold;
@@ -633,7 +634,7 @@ void luaC_step (lua_State *L) {
   }
 }
 
-
+// 执行完整的一次GC动作
 void luaC_fullgc (lua_State *L) {
   global_State *g = G(L);
   if (g->gcstate <= GCSpropagate) {
@@ -652,6 +653,7 @@ void luaC_fullgc (lua_State *L) {
     lua_assert(g->gcstate == GCSsweepstring || g->gcstate == GCSsweep);
     singlestep(L);
   }
+  // 再执行一次完整的GC流程
   markroot(L);
   while (g->gcstate != GCSpause) {
     singlestep(L);

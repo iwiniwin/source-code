@@ -84,6 +84,8 @@ typedef struct global_State {
   lu_mem GCthreshold;
   lu_mem totalbytes;  /* number of bytes currently allocated */  // lua vm实际分配的字节数
   lu_mem estimate;  /* an estimate of number of bytes actually in use */  // 估算值，lua vm占用的内存字节数
+																		  // 比totalbytes要小，因为被检测出已经访问不到的userdata占用的内存不会马上释放（保证gc元方法的安全调用）
+																		  // 但estimate会抛去这部分，见lgc.c 553行 g->estimate = g->totalbytes - udsize;
   lu_mem gcdept;  /* how much GC is `behind schedule' */
   int gcpause;  /* size of pause between successive GCs */
   int gcstepmul;  /* GC `granularity' */
