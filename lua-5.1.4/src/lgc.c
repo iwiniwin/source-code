@@ -25,7 +25,7 @@
 
 #define GCSTEPSIZE	1024u
 #define GCSWEEPMAX	40
-#define GCSWEEPCOST	10  // 表示GC的进度
+#define GCSWEEPCOST	10  // 经验值，释放一个对象的开销
 #define GCFINALIZECOST	100
 
 
@@ -442,7 +442,7 @@ static void checkSizes (lua_State *L) {
   }
 }
 
-
+// 每次调用一个需要回收的userdata的gc元方法
 static void GCTM (lua_State *L) {
   global_State *g = G(L);
   GCObject *o = g->tmudata->gch.next;  /* get first element */
@@ -461,7 +461,7 @@ static void GCTM (lua_State *L) {
     lu_byte oldah = L->allowhook;
     lu_mem oldt = g->GCthreshold;
     L->allowhook = 0;  /* stop debug hooks during GC tag method */
-    g->GCthreshold = 2*g->totalbytes;  /* avoid GC steps */
+    g->GCthreshold = 2*g->totalbytes;  /* avoid GC steps */  // 将GCthreshold设置比较大，避免gc方法里再出发gc
     setobj2s(L, L->top, tm);
     setuvalue(L, L->top+1, udata);
     L->top += 2;
@@ -554,7 +554,7 @@ static void atomic (lua_State *L) {
 }
 
 // 一个简单的状态机，gc状态从一个状态切换到下一个状态
-// 返回值决定了GC的进度
+// 返回值决定了GC的进度，大致的执行时间
 static l_mem singlestep (lua_State *L) {
   global_State *g = G(L);
   /*lua_checkmemory(L);*/
@@ -571,18 +571,18 @@ static l_mem singlestep (lua_State *L) {
         return 0;
       }
     }
-    case GCSsweepstring: {
+    case GCSsweepstring: {  // 清理字符串 在这个阶段string对象有可能清理不干净，如果step间发生string table的hash扩容事件，那么一些来不及清理的string有可能被打乱放到已经通过GCSsweepstring的hash表列里
       lu_mem old = g->totalbytes;
-      sweepwholelist(L, &g->strt.hash[g->sweepstrgc++]);  // 每个step清理hash表的一列
+      sweepwholelist(L, &g->strt.hash[g->sweepstrgc++]);  // 每个step清理hash表的一列  
       if (g->sweepstrgc >= g->strt.size)  /* nothing more to sweep? */
         g->gcstate = GCSsweep;  /* end sweep-string phase */
       lua_assert(old >= g->totalbytes);
       g->estimate -= old - g->totalbytes;
       return GCSWEEPCOST;
     }
-    case GCSsweep: {
+    case GCSsweep: {  // 清理其他对象  清理的是整个GCObject链表，由于链表很长，所以也是分段完成的，每次遍历GCSWEEPMAX个
       lu_mem old = g->totalbytes;
-      g->sweepgc = sweeplist(L, g->sweepgc, GCSWEEPMAX);
+      g->sweepgc = sweeplist(L, g->sweepgc, GCSWEEPMAX);  // sweepgc指针记录遍历的位置
       if (*g->sweepgc == NULL) {  /* nothing more to sweep? */
         checkSizes(L);
         g->gcstate = GCSfinalize;  /* end sweep phase */
@@ -661,7 +661,7 @@ void luaC_fullgc (lua_State *L) {
   setthreshold(g);
 }
 
-
+// 用于把新建立联系的对象立刻标记
 void luaC_barrierf (lua_State *L, GCObject *o, GCObject *v) {
   global_State *g = G(L);
   lua_assert(isblack(o) && iswhite(v) && !isdead(g, v) && !isdead(g, o));
