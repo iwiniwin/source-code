@@ -715,6 +715,7 @@ namespace XLua
             }
             CustomAttribute hotfixAttr = type.CustomAttributes.FirstOrDefault(ca => ca.AttributeType == hotfixAttributeType);  // 获取type上的HotfixAttribute
             HotfixFlagInTool hotfixType;
+            // 仅对带有HotfixAttribute的类型或hotfixCfg中有配置的类型进行注入
             if (hotfixAttr != null)
             {
                 hotfixType = (HotfixFlagInTool)(int)hotfixAttr.ConstructorArguments[0].Value;  // 获取HotfixAttribute构造函数的第一个参数，HotfixFlag
@@ -893,6 +894,7 @@ namespace XLua
                     Info(injectAssemblyPath + " had injected!");
                     return;
                 }
+                // 添加一个新的类型定义，以标记已注入
                 injectAssembly.MainModule.Types.Add(new TypeDefinition("__XLUA_GEN", "__XLUA_GEN_FLAG", ILRuntime.Mono.Cecil.TypeAttributes.Class,
                     injectAssembly.MainModule.TypeSystem.Object));
 
@@ -915,7 +917,7 @@ namespace XLua
                 Directory.CreateDirectory(Path.GetDirectoryName(idMapFilePath));
                 hotfix.OutputIntKeyMapper(new FileStream(idMapFilePath, FileMode.Create, FileAccess.Write));
                 File.Copy(idMapFilePath, idMapFilePath + "." + DateTime.Now.ToString("yyyyMMddHHmmssfff"));
-
+                // 写入对程序集的修改
                 writeAssembly(injectAssembly, injectAssemblyPath);
                 Info(injectAssemblyPath + " inject finish!");
             }
@@ -1208,7 +1210,7 @@ namespace XLua
         /// <param name="hotfixType"></param>
         bool injectMethod(MethodDefinition method, HotfixFlagInTool hotfixType)
         {
-            var type = method.DeclaringType;
+            var type = method.DeclaringType;  // 方法所在类
             
             bool isFinalize = (method.Name == "Finalize" && method.IsSpecialName);
 
@@ -1216,7 +1218,7 @@ namespace XLua
 
             int param_count = method.Parameters.Count + (method.IsStatic ? 0 : 1);
 
-            if (!findHotfixDelegate(method, out invoke, hotfixType))  // 找到method对应的生成方法
+            if (!findHotfixDelegate(method, out invoke, hotfixType))  // 找到与method匹配的生成方法，以__Gen_Delegate_Imp开头的
             {
                 Error("can not find delegate for " + method.DeclaringType + "." + method.Name + "! try re-genertate code.");
                 return false;
@@ -1235,14 +1237,15 @@ namespace XLua
 
             FieldReference fieldReference = null;
             VariableDefinition injection = null;
-            bool isIntKey = hotfixType.HasFlag(HotfixFlagInTool.IntKey) && !type.HasGenericParameters && isTheSameAssembly;
+            // IntKey是xLua的标志位，可以控制不生成静态字段，而是把所有注入点放到一个数组集中管理。这里可以先忽略
+            bool isIntKey = hotfixType.HasFlag(HotfixFlagInTool.IntKey) && !type.HasGenericParameters && isTheSameAssembly;  
             //isIntKey = !type.HasGenericParameters;
             if (!isIntKey)
             {
-                injection = new VariableDefinition(invoke.DeclaringType);  // 新创建一个变量
+                injection = new VariableDefinition(invoke.DeclaringType);  // 新创建一个XLua.DelegateBridge类型的变量
                 method.Body.Variables.Add(injection);
 
-                var luaDelegateName = getDelegateName(method);
+                var luaDelegateName = getDelegateName(method);  // 获取将要添加的静态变量的名称，这个静态变量用于保存Lua补丁设置的方法
                 if (luaDelegateName == null)
                 {
                     Error("too many overload!");
@@ -1250,7 +1253,7 @@ namespace XLua
                 }
 
                 FieldDefinition fieldDefinition = new FieldDefinition(luaDelegateName, ILRuntime.Mono.Cecil.FieldAttributes.Static | ILRuntime.Mono.Cecil.FieldAttributes.Private,
-                    invoke.DeclaringType);
+                    invoke.DeclaringType);  // 创建一个静态XLua.DelegateBridge变量，用于保存Lua补丁设置的方法
                 type.Fields.Add(fieldDefinition);  // 给type添加一个luaDelegateName静态字段，这个字段值在调用xlua.hotfix时会赋值
                 fieldReference = fieldDefinition.GetGeneric();
             }
@@ -1267,6 +1270,8 @@ namespace XLua
 
             Dictionary<Instruction, Instruction> originToNewTarget = new Dictionary<Instruction, Instruction>();
             HashSet<Instruction> noCheck = new HashSet<Instruction>();
+
+            // 真正的IL代码注入逻辑
 
             while (insertPoint != null)
             {
@@ -1285,7 +1290,8 @@ namespace XLua
                     processor.InsertBefore(insertPoint, processor.Create(OpCodes.Ldloc, injection));  // 加载本地变量
                 }
 
-                var jmpInstruction = processor.Create(OpCodes.Brfalse, insertPoint);  // Brfalse表示栈上的值为 false/null/0 时发生跳转，如果injection的值为空，就调转到insertPoint，那通过InsertBefore插入的指令就都会被跳过了
+                // Brfalse表示栈上的值为 false/null/0 时发生跳转，如果injection的值为空，就调转到insertPoint，那通过InsertBefore插入的指令就都会被跳过了
+                var jmpInstruction = processor.Create(OpCodes.Brfalse, insertPoint);  
                 processor.InsertBefore(insertPoint, jmpInstruction);
 
                 if (isIntKey)
@@ -1295,9 +1301,9 @@ namespace XLua
                 }
                 else
                 {
-                    processor.InsertBefore(insertPoint, processor.Create(OpCodes.Ldloc, injection));
+                    processor.InsertBefore(insertPoint, processor.Create(OpCodes.Ldloc, injection));  // 再加载一次injection的值
                 }
-
+                // 加载参数
                 for (int i = 0; i < param_count; i++)
                 {
                     if (i < ldargs.Length)
@@ -1335,11 +1341,12 @@ namespace XLua
                     }
                 }
 
+                // 插入方法调用指令
                 processor.InsertBefore(insertPoint, processor.Create(OpCodes.Call, invoke));  // 调用injection处值（DelegateBridge对象）的方法invoke（__Gen_Delegate_Imp开头的方法）
 
                 if (!method.IsConstructor && !isFinalize)
                 {
-                    processor.InsertBefore(insertPoint, processor.Create(OpCodes.Ret));  // 添加返回
+                    processor.InsertBefore(insertPoint, processor.Create(OpCodes.Ret));  // 插入返回指令
                 }
 
                 if (!method.IsConstructor)
